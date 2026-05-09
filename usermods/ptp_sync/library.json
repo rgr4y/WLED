@@ -1,0 +1,5 @@
+{
+  "name": "ptp_sync",
+  "build": { "libArchive": false },
+  "dependencies": {}
+}

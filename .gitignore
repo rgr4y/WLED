@@ -16,6 +16,7 @@ __pycache__/
 
 esp01-update.sh
 platformio_override.ini
+platformio_release.ini
 replace_fs.py
 wled-update.sh
 
@@ -30,3 +31,4 @@ wled-update.sh
 /wled00/wled00.ino.cpp
 /wled00/html_*.h
 /wled00/js_*.h
+.vscode

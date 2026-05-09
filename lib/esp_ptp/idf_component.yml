@@ -1,0 +1,8 @@
+version: "0.9.4"
+description: "PTP client and server component for ESP32"
+url: "https://github.com/scrambletools/esp_ptp"
+license: "Apache 2.0"
+dependencies:
+  idf: ^6.0
+targets:
+  - esp32c6dev_4MB_wifi
