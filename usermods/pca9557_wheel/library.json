@@ -1,0 +1,5 @@
+{
+  "name": "pca9557_wheel",
+  "build": { "libArchive": false },
+  "dependencies": {}
+}
