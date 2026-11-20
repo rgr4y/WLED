@@ -1,5 +1,6 @@
 
 #include "wled.h"
+#include "audio_reactive_ctl.h"
 
 #ifdef ARDUINO_ARCH_ESP32
 
@@ -835,6 +836,30 @@ class AudioReactive : public Usermod {
     #endif
 
     bool     initDone = false;
+    bool     inputPaused = false;   // I2S input released via pauseInput()
+
+    // (re)initialize the existing audioSource for the current dmType (shared by setup() and resumeInput())
+    void initSource() {
+      if (!audioSource) return;
+#ifdef ARDUINO_ARCH_ESP32
+      switch (dmType) {
+        case 2: case 4: case 6: case 7:
+          audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+          break;
+        case 5:
+          audioSource->initialize(i2swsPin, i2ssdPin);
+          break;
+      #if defined(AR_ANALOG_MIC_SUPPORTED)
+        case 0:
+          audioSource->initialize(audioPin);
+          break;
+      #endif
+        default:  // 1, 3 (and unsupported-MCU fallbacks)
+          audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin);
+          break;
+      }
+#endif
+    }
     bool     addPalettes = false;
     int8_t   palettes = 0;
 
@@ -1342,6 +1367,23 @@ class AudioReactive : public Usermod {
     //////////////////////
 
   public:
+    // Release the mic's I2S channel and pins so another usermod can use the port. false = nothing to pause.
+    bool pauseInput() {
+      if (!audioSource || !audioSource->isInitialized() || inputPaused) return false;
+      disableSoundProcessing = true;
+      delay(30);   // let the FFT task finish a getSamples() call in flight (one block ~23ms)
+      audioSource->deinitialize();
+      inputPaused = true;
+      return true;
+    }
+
+    // loop() re-enables sound processing once the source is initialized again
+    void resumeInput() {
+      if (!inputPaused) return;
+      initSource();
+      inputPaused = false;
+    }
+
     //Functions called by WLED or other usermods
 
     /*
@@ -1408,26 +1450,26 @@ class AudioReactive : public Usermod {
           DEBUGSR_PRINT(F("AR: Generic I2S Microphone - ")); DEBUGSR_PRINTLN(F(I2S_MIC_CHANNEL_TEXT));
           audioSource = new I2SSource(SAMPLE_RATE, BLOCK_SIZE);
           delay(100);
-          if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin);
+          initSource();
           break;
         case 2:
           DEBUGSR_PRINTLN(F("AR: ES7243 Microphone (right channel only)."));
           audioSource = new ES7243(SAMPLE_RATE, BLOCK_SIZE);
           delay(100);
-          if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+          initSource();
           break;
         case 3:
           DEBUGSR_PRINT(F("AR: SPH0645 Microphone - ")); DEBUGSR_PRINTLN(F(I2S_MIC_CHANNEL_TEXT));
           audioSource = new SPH0654(SAMPLE_RATE, BLOCK_SIZE);
           delay(100);
-          audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin);
+          initSource();
           break;
         case 4:
           DEBUGSR_PRINT(F("AR: Generic I2S Microphone with Master Clock - ")); DEBUGSR_PRINTLN(F(I2S_MIC_CHANNEL_TEXT));
           audioSource = new I2SSource(SAMPLE_RATE, BLOCK_SIZE, 1.0f/24.0f);
           useMicFilter = false; // I2S with Master Clock is mostly used for line-in, skip sample filtering
           delay(100);
-          if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+          initSource();
           break;
         #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3)  // PDM is only supported on S3 and classic esp32
         case 5:
@@ -1435,7 +1477,7 @@ class AudioReactive : public Usermod {
           audioSource = new I2SSource(SAMPLE_RATE, BLOCK_SIZE, 1.0f/4.0f);
           useBandPassFilter = true;  // this reduces the noise floor on SPM1423 from 5% Vpp (~380) down to 0.05% Vpp (~5)
           delay(100);
-          if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin);
+          initSource();
           break;
         #endif
         case 6:
@@ -1443,13 +1485,13 @@ class AudioReactive : public Usermod {
           audioSource = new ES8388Source(SAMPLE_RATE, BLOCK_SIZE);
           useMicFilter = false;
           delay(100);
-          if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+          initSource();
           break;
         case 7:
           DEBUGSR_PRINTLN(F("AR: ES7210 Microphone (MIC1, left channel)."));
           audioSource = new ES7210Source(SAMPLE_RATE, BLOCK_SIZE);
           delay(100);
-          if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+          initSource();
           break;
 
       #if defined(AR_ANALOG_MIC_SUPPORTED)
@@ -1463,7 +1505,7 @@ class AudioReactive : public Usermod {
         #endif
           delay(100);
           useBandPassFilter = true;  // PDM bandpass filter seems to help for bad quality analog
-          if (audioSource) audioSource->initialize(audioPin);
+          initSource();
           break;
         #endif
 
@@ -2338,3 +2380,6 @@ const char AudioReactive::UDP_SYNC_HEADER_v1[] PROGMEM = "00001"; // old sync he
 
 static AudioReactive ar_module;
 REGISTER_USERMOD(ar_module);
+
+bool arPauseInput() { return ar_module.pauseInput(); }
+void arResumeInput() { ar_module.resumeInput(); }
