@@ -19,7 +19,7 @@ Requires the global I2C pins (SDA 1 / SCL 2 on this board).
 | `mclkPin` / `bclkPin` / `lrckPin` | 38 / 48 / 21 | I2S clocks |
 | `doutPin` | 14 | I2S data to the codec (DSDIN) |
 | `ampPin` | 3 | NS4150 enable, active high, -1 = none. GPIO3 is likely but unconfirmed |
-| `volume` | 60 | 0-100 (0 = muted, 100 = 0 dB) |
+| `volume` | 100 | 0-100 (0 = muted, 1-100 = -47.5 to 0 dB in 0.5 dB steps) |
 | `sampleRate` | 44100 | 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000 |
 | `udpPort` | 4049 | UDP port for network audio (WLED already uses 21324, 4048, 5568, 6454, 65506, 11988) |
 | `bufferMs` | 150 | audio buffered before playback starts (20-500); this is also the delay against the picture |
@@ -33,6 +33,15 @@ curl -s -X POST http://<ip>/json/state -d '{"es8311":{"tone":1000,"ms":2000}}'
 
 `tone` 50-8000 Hz (default 1000), `ms` 100-10000 (default 2000). A second request while playing
 restarts the tone. The info page shows idle / playing and the last error.
+
+## Volume
+
+```sh
+curl -s -X POST http://<ip>/json/state -d '{"es8311":{"vol":80}}'
+```
+
+Takes effect immediately, even mid-stream, and is saved to the config. `/json/state` reports the
+current value as `es8311.vol`.
 
 ## Network audio
 

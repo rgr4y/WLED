@@ -39,7 +39,7 @@ class ES8311Player : public Usermod {
     int8_t  lrckPin    = 21;
     int8_t  doutPin    = 14;
     int8_t  ampPin     = 3;     // NS4150_EN, -1 = none. GPIO3 is likely but unconfirmed (could be on the PCA9557)
-    uint8_t volume     = 60;    // 0-100
+    uint8_t volume     = 100;   // 0-100, 100 = 0 dB (full-scale DAC output)
     uint32_t sampleRate = 44100;
     uint16_t udpPort   = 4049;
     uint16_t bufferMs  = 150;   // fill before playback starts
@@ -102,6 +102,10 @@ class ES8311Player : public Usermod {
       return false;
     }
 
+    // DAC_REG32: 0.5 dB steps, 0x00 = -95.5 dB, 0xBF = 0 dB, 0xFF = +32 dB. 1..100 -> -47.5..0 dB, 0 -> muted.
+    // ponytail: capped at 0 dB, since digital gain above it clips full-scale audio; add a boost setting if 100 is still too quiet.
+    uint8_t volReg() const { return volume ? (0x60 + (uint16_t)volume * 0x5F / 100) : 0; }
+
     // esp_codec_dev: es8311_open + es8311_set_fs + es8311_start (DAC only, slave, MCLK = 256 x fs)
     bool codecInit() {
       bool ok = wr(0x0D, 0xFA);            // SYSTEM_REG0D
@@ -158,9 +162,7 @@ class ES8311Player : public Usermod {
       ok &= wr(0x37, 0x08);                // DAC ramp rate
       ok &= wr(0x45, 0x00);
 
-      // volume: 0.5 dB steps, 0xBF = 0 dB. 100 -> 0 dB, 0 -> muted
-      uint8_t reg = volume ? (0x60 + (uint16_t)volume * 0x5F / 100) : 0;
-      ok &= wr(0x32, reg);
+      ok &= wr(0x32, volReg());
       ok &= wr(0x31, rd(0x31) & 0x9F);     // unmute
       if (!ok) lastError = "ES8311 I2C write failed";
       return ok;
@@ -454,9 +456,20 @@ class ES8311Player : public Usermod {
     void readFromJsonState(JsonObject& root) override {
       JsonObject o = root[F("es8311")];
       if (o.isNull()) return;
+      if (o[F("vol")].is<int>()) {   // live volume, saved to config
+        volume = constrain(o[F("vol")].as<int>(), 0, 100);
+        if (tx) wr(0x32, volReg());
+        configNeedsWrite = true;
+      }
+      if (o[F("tone")].isNull()) return;
       uint32_t hz = constrain(o[F("tone")] | 1000, 50, 8000);
       uint32_t ms = constrain(o[F("ms")] | 2000, 100, 10000);
       startTone(hz, ms);
+    }
+
+    void addToJsonState(JsonObject& root) override {
+      JsonObject o = root.createNestedObject(F("es8311"));
+      o[F("vol")] = volume;
     }
 
     void addToJsonInfo(JsonObject& root) override {
