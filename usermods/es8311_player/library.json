@@ -1,0 +1,5 @@
+{
+  "name": "es8311_player",
+  "build": { "libArchive": false },
+  "dependencies": {}
+}
