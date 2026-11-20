@@ -1,7 +1,8 @@
 # ES8311 player
 
 Speaker output through the ES8311 codec and NS4150 amp on the
-[Seengreat RGB Matrix HUB75 S3](https://seengreat.com/wiki/214). Spike stage: plays a test tone.
+[Seengreat RGB Matrix HUB75 S3](https://seengreat.com/wiki/214). Plays a test tone and
+network audio (raw PCM over UDP).
 
 The I2S port is shared with the mic (ES7210, `audioreactive`). While playing, this usermod pauses
 audioreactive's input (`arPauseInput()`), takes the I2S pins, and hands them back (`arResumeInput()`)
@@ -20,6 +21,9 @@ Requires the global I2C pins (SDA 1 / SCL 2 on this board).
 | `ampPin` | 3 | NS4150 enable, active high, -1 = none. GPIO3 is likely but unconfirmed |
 | `volume` | 60 | 0-100 (0 = muted, 100 = 0 dB) |
 | `sampleRate` | 44100 | 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000 |
+| `udpPort` | 4049 | UDP port for network audio (WLED already uses 21324, 4048, 5568, 6454, 65506, 11988) |
+| `bufferMs` | 150 | audio buffered before playback starts (20-500); this is also the delay against the picture |
+| `timeoutMs` | 1000 | no packets for this long = stream over, speaker off, mic back (100-10000) |
 
 ## Test tone
 
@@ -29,6 +33,46 @@ curl -s -X POST http://<ip>/json/state -d '{"es8311":{"tone":1000,"ms":2000}}'
 
 `tone` 50-8000 Hz (default 1000), `ms` 100-10000 (default 2000). A second request while playing
 restarts the tone. The info page shows idle / playing and the last error.
+
+## Network audio
+
+Packet format, little-endian, one UDP datagram each:
+
+| Bytes | Content |
+|---|---|
+| 0-3 | magic `"WAU1"` |
+| 4-7 | sequence number (u32, +1 per packet) |
+| 8-11 | sample rate in Hz (u32), must equal `sampleRate` |
+| 12 | channels, 1 or 2 (stereo is downmixed to mono) |
+| 13-15 | reserved, 0 |
+| 16- | PCM, signed 16-bit |
+
+Packets with the wrong magic, a different sample rate, bad channel count or an odd payload are
+dropped (a rate mismatch is logged once). Late and duplicate sequence numbers are dropped; a gap
+shorter than 50 ms is filled with silence. The first valid packet pauses audioreactive and starts
+the output; it plays once `bufferMs` is buffered (about 1 s of buffer in PSRAM). On underrun it
+goes silent and re-buffers. After `timeoutMs` without packets the rest is played out and the I2S
+port goes back to audioreactive. The test tone is ignored while a stream plays. Keep packets
+around 1000 bytes of PCM (500 samples) so they fit one frame.
+
+Test sender (`send.py`, any rate in the table, needs ffmpeg):
+
+```python
+import socket, struct, subprocess, sys, time
+host, path, rate = sys.argv[1], sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 44100
+ff = subprocess.Popen(["ffmpeg", "-re", "-i", path, "-vn", "-ac", "1", "-ar", str(rate),
+                       "-f", "s16le", "-"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+sock, seq = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), 0
+while True:
+    pcm = ff.stdout.read(1000)          # 500 samples, ~11 ms at 44.1k; -re paces ffmpeg
+    if len(pcm) < 2: break
+    pcm = pcm[:len(pcm) & ~1]
+    sock.sendto(b"WAU1" + struct.pack("<IIB3x", seq, rate, 1) + pcm, (host, 4049))
+    seq += 1
+```
+
+`python3 send.py <ip> in.mp4 44100`. ffmpeg's `-re` reads at playback speed, so no timing code is
+needed. Audio lags the picture by about `bufferMs`; delay the video by that much on the host.
 
 ## Build
 
