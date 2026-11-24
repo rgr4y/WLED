@@ -89,4 +89,15 @@ needed. Audio lags the picture by about `bufferMs`; delay the video by that much
 custom_usermods = audioreactive es8311_player
 ```
 
+Pin defaults are for the Seengreat board. Other boards override them with build flags
+(`ES8311_MCLK_PIN`, `ES8311_BCLK_PIN`, `ES8311_LRCK_PIN`, `ES8311_DOUT_PIN`, `ES8311_AMP_PIN`).
+Waveshare ESP32-S3-RGB-Matrix, from its schematic:
+
+```ini
+  -D ES8311_MCLK_PIN=12 -D ES8311_BCLK_PIN=43 -D ES8311_LRCK_PIN=38 -D ES8311_DOUT_PIN=21 -D ES8311_AMP_PIN=11
+```
+
+Use the in-tree `audioreactive` with it; other forks lack the `arPauseInput()` hook, so the shared
+I2S pins stay taken by the mic and playback fails with "I2S/amp pin allocation failed".
+
 The ES8311 register sequence is ported from Espressif `esp_codec_dev` (Apache-2.0).

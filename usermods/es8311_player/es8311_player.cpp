@@ -29,16 +29,33 @@ __attribute__((weak)) void arResumeInput() {}
 #define ES8311_HDR_LEN          16
 #define ES8311_MAX_GAP_MS       50      // fill a lost-packet gap with silence only below this
 
+// default pins (Seengreat RGB Matrix HUB75 S3), override per board with build flags
+#ifndef ES8311_MCLK_PIN
+  #define ES8311_MCLK_PIN 38
+#endif
+#ifndef ES8311_BCLK_PIN
+  #define ES8311_BCLK_PIN 48
+#endif
+#ifndef ES8311_LRCK_PIN
+  #define ES8311_LRCK_PIN 21
+#endif
+#ifndef ES8311_DOUT_PIN
+  #define ES8311_DOUT_PIN 14
+#endif
+#ifndef ES8311_AMP_PIN
+  #define ES8311_AMP_PIN  3     // NS4150 enable, -1 = none. GPIO3 on Seengreat is likely but unconfirmed (could be on the PCA9557)
+#endif
+
 class ES8311Player : public Usermod {
   private:
     // config
     bool    enabled    = true;
     uint8_t i2cAddr    = 0x18;
-    int8_t  mclkPin    = 38;
-    int8_t  bclkPin    = 48;
-    int8_t  lrckPin    = 21;
-    int8_t  doutPin    = 14;
-    int8_t  ampPin     = 3;     // NS4150_EN, -1 = none. GPIO3 is likely but unconfirmed (could be on the PCA9557)
+    int8_t  mclkPin    = ES8311_MCLK_PIN;
+    int8_t  bclkPin    = ES8311_BCLK_PIN;
+    int8_t  lrckPin    = ES8311_LRCK_PIN;
+    int8_t  doutPin    = ES8311_DOUT_PIN;
+    int8_t  ampPin     = ES8311_AMP_PIN;
     uint8_t volume     = 100;   // 0-100, 100 = 0 dB (full-scale DAC output)
     uint32_t sampleRate = 44100;
     uint16_t udpPort   = 4049;
@@ -502,11 +519,11 @@ class ES8311Player : public Usermod {
       bool configComplete = !top.isNull();
       configComplete &= getJsonValue(top[F("enabled")],    enabled, true);
       configComplete &= getJsonValue(top[F("i2cAddr")],    i2cAddr, (uint8_t)0x18);
-      configComplete &= getJsonValue(top[F("mclkPin")],    mclkPin, (int8_t)38);
-      configComplete &= getJsonValue(top[F("bclkPin")],    bclkPin, (int8_t)48);
-      configComplete &= getJsonValue(top[F("lrckPin")],    lrckPin, (int8_t)21);
-      configComplete &= getJsonValue(top[F("doutPin")],    doutPin, (int8_t)14);
-      configComplete &= getJsonValue(top[F("ampPin")],     ampPin, (int8_t)3);
+      configComplete &= getJsonValue(top[F("mclkPin")],    mclkPin, (int8_t)ES8311_MCLK_PIN);
+      configComplete &= getJsonValue(top[F("bclkPin")],    bclkPin, (int8_t)ES8311_BCLK_PIN);
+      configComplete &= getJsonValue(top[F("lrckPin")],    lrckPin, (int8_t)ES8311_LRCK_PIN);
+      configComplete &= getJsonValue(top[F("doutPin")],    doutPin, (int8_t)ES8311_DOUT_PIN);
+      configComplete &= getJsonValue(top[F("ampPin")],     ampPin, (int8_t)ES8311_AMP_PIN);
       configComplete &= getJsonValue(top[F("volume")],     volume, (uint8_t)60);
       configComplete &= getJsonValue(top[F("sampleRate")], sampleRate, (uint32_t)44100);
       configComplete &= getJsonValue(top[F("udpPort")],    udpPort, (uint16_t)4049);
