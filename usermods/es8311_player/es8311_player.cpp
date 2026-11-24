@@ -18,7 +18,7 @@
  * small task. The first valid packet starts the output, silence for timeoutMs stops it (like DDP realtime).
  */
 
-// audioreactive hooks (usermods/audioreactive/audio_reactive_ctl.h); weak fallbacks if it is not built in
+// audioreactive hooks (usermods/audioreactive_v1/audio_reactive_ctl.h); weak fallbacks if it is not built in
 __attribute__((weak)) bool arPauseInput() { return false; }
 __attribute__((weak)) void arResumeInput() {}
 
